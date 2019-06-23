@@ -4,11 +4,11 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-		<title>reveal.js</title>
+		<title>Web Assembly with Rust</title>
 
 		<link rel="stylesheet" href="css/reset.css">
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/solarized.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/monokai.css">
@@ -21,12 +21,519 @@
 			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
 			document.getElementsByTagName( 'head' )[0].appendChild( link );
 		</script>
+
+		<style>
+			.webpack {
+				background-color: #2b3a42;
+				padding: 0 1em;
+			}
+			.source {
+				font-size: 10pt;
+			}
+		</style>
 	</head>
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>
+					<h1>Rust for Web (Client) Development</h1>
+					<p>with wasm32-unknown-unknown</p>
+				</section>
+				<section>
+					<h1>Why Web Assembly?</h1>
+					<ul>
+						<li>Java Applets, Flash, Unity Plugin</li>
+						<li>DHTML with JavaScript</li>
+						<li>asm.js</li>
+					</ul>
+					<aside class="notes">
+						<ul>
+							<li>JavaScript is bad for large-scale web applications.</li>
+							<li>Plugins are bad, because they're not vendor independent.</li>
+							<li>Compile-to-JavaScript, then asm.js. emscripten.</li>
+							<li>asm.js is bad for Unity, loading times of a minute or more.</li>
+							<li>WASM is a standardized platform-independent binary format that can be stream-compiled.</li>
+							<li>WASM can also be used for regular platform independent binaries.</li>
+							<li>WASM in web browsers uses the JavaScript sandbox, rather than having its own like Java and Flash. Allows exchanging data easily.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<img src="caniuse.png" width="100%" height="100%" alt="Browser Support">
+					<aside class="notes">
+						node.js also supports Web Assembly.
+					</aside>
+				</section>
+				<section>
+					<h2>WASM Memory</h2>
+					<ul>
+						<li>No garbage collection (yet)!</li>
+						<li>Memory is just an ArrayBuffer.</li>
+						<li>Code requests memory amount, can grow later.</li>
+					</ul>
+					<aside class="notes">
+						<ul>
+							<li>WASM is very minimal for maximum flexibility. The WASM code is supposed to do its own memory management.</li>
+							<li>The lack of a garbage collector resulted in many languages not being a good fit for being compiled to WASM, like Java, C#, python, Ruby. Rust is a great language for that, especially since it doesn't need a heavy runtime.</li>
+							<li>Memory addresses are just indices into this array.</li>
+							<li>JavaScript can access that ArrayBuffer just like a regular one.</li>
+							<li>JavaScript/WASM interactions can only pass numbers! But they can be indices into this array.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h2>Install</h2>
+					<code>rustup target add wasm32-unknown-unknown</code>
+					<aside class="notes">
+						Would be the whole story just for compilation, but not enough for the whole ecosystem!
+					</aside>
+				</section>
+				<section>
+					<h2>Three Stages of Mappings</h2>
+					<ol>
+						<li>wasm-bindgen</li>
+						<li>js-sys</li>
+						<li>web-sys</li>
+					</ol>
+					<aside class="notes">
+						<ul>
+							<li>WASM doesn't provide direct access to JavaScript APIs. wasm-bindgen can generate mappings for them, including converting common data types like strings.</li>
+							<li>Also maps Rust structs and impls into JavaScript! Can be used like regular JavaScript objects (no attributes, though).</li>
+							<li>Designed to provide a seamless transition once the official standard for accessing the browser API directly is implemented.</li>
+							<li>js-sys provides automatically generated mappings for standard JavaScript APIs (browsers and node.js) like Object, Number, Iterator, Array, ArrayBuffer, Date, etc</li>
+							<li>web-sys provides automatically generated mappings for browser APIs like fetch, the DOM, Canvas/WebGL, etc.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<pre><code data-trim>
+use wasm_bindgen::prelude::*;
+
+// Import the `window.alert` function from the Web.
+#[wasm_bindgen]
+extern "C" {
+	fn alert(s: &str);
+}
+
+// Export a `greet` function from Rust to JavaScript, that alerts a
+// hello message.
+#[wasm_bindgen]
+pub fn greet(name: &str) {
+	alert(&format!("Hello, {}!", name));
+}</code></pre>
+					<pre><code data-trim>
+import { greet } from "./hello_world";
+
+greet("World!");</code></pre>
+					<aside class="notes">
+						wasm-pack command line tool generates the code mapping the two APIs in JavaScript (and loading the web assembly code) you can then import as a web module.
+					</aside>
+				</section>
+				<section>
+					<h2>Howto</h2>
+					<ul>
+						<li><pre><code data-trim class="toml">
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+							</code></pre></li>
+						<li>+ custom HTML/JavaScript for loading</li>
+						<li><code>cargo build --target wasm32-unknown-unknown</code></li>
+					</ul>
+					<aside class="notes">
+						Works, but not a convenient development pipeline.
+					</aside>
+				</section>
+				<section>
+					<h2>webpack</h2>
+					<svg class="webpack" viewBox="0 0 1088 615" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+						<g stroke-width="1" fill="none" fill-rule="evenodd">
+							<text font-family="'Source Sans Pro', sans-serif" font-size="18" font-weight="600" fill="#86A5BA">
+								<tspan x="933.778" y="459">STATIC ASSETS</tspan>
+							</text>
+							<g transform="translate(1002, 326)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-1"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="84" height="84" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="18.891" y="46.7096774">.png</tspan>
+								</text>
+							</g>
+							<g transform="translate(1002, 214)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-2"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="84" height="84" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="22.532" y="46.7096774">.css</tspan>
+								</text>
+							</g>
+							<g transform="translate(894, 326)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-3"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="84" height="84" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="21.817" y="46.7096774">.jpg</tspan>
+								</text>
+							</g>
+							<g transform="translate(894, 214)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-4"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="84" height="84" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="29" y="46.7096774">.js</tspan>
+								</text>
+							</g>
+							<g transform="translate(342, 225)" stroke="#7E8C94" stroke-width="4">
+								<path d="M499.558824,86.52 C499.558824,86.52 484.852941,81.02 439.908088,109.436667 C394.963235,137.853333 380.992647,164.436667 380.992647,164.436667" stroke-dasharray="7"></path>
+								<path d="M499.558824,86.0616667 C499.558824,86.0616667 484.852941,91.5616667 439.908088,63.145 C394.963235,34.7283333 380.992647,8.145 380.992647,8.145" stroke-dasharray="7"></path>
+								<path d="M0.477941176,170.395 C0.477941176,170.395 169.382939,98.895 447.847936,98.895" stroke-dasharray="6"></path>
+								<path d="M0.477941176,72.395 C0.477941176,72.395 169.382939,0.895 447.847936,0.895" stroke-dasharray="6" transform="translate(224.162939, 36.645000) scale(1, -1) translate(-224.162939, -36.645000) "></path>
+							</g>
+							<text font-family="'Source Sans Pro', sans-serif" font-size="18" font-weight="600" fill="#86A5BA">
+								<tspan x="24.934" y="562">MODULES WITH DEPENDENCIES</tspan>
+							</text>
+							<g transform="translate(228, 335)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-5"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="12.817" y="38">.jpg</tspan>
+								</text>
+							</g>
+							<g transform="translate(228, 223)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-6"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="9.891" y="38">.png</tspan>
+								</text>
+							</g>
+							<g transform="translate(302, 414.500000) scale(1, -1) translate(-302, -414.500000) translate(182, 404)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="6" width="2" height="12"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 4.704683) rotate(-45) translate(-75.304690, -4.704683) " x="74.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="72" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 12 77 20.8000002 74 12"></polyline>
+							</g>
+							<g transform="translate(116, 391)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-7"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="8.076" y="38">.sass</tspan>
+								</text>
+							</g>
+							<g transform="translate(116, 279)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-8"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="8.076" y="38">.sass</tspan>
+								</text>
+							</g>
+							<g transform="translate(182, 201)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="113" width="2" height="12"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 111.704683) rotate(-45) translate(-75.304690, -111.704683) " x="74.3046896" y="108.879683" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="26" y="109" width="48" height="2"></rect>
+								<rect fill="#BBDBEC" transform="translate(24.704683, 108.304690) rotate(-45) translate(-24.704683, -108.304690) " x="23.7046835" y="105.47969" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="22" y="6" width="2" height="101"></rect>
+								<rect fill="#BBDBEC" transform="translate(21.304690, 4.704683) rotate(-45) translate(-21.304690, -4.704683) " x="20.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="18" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 118 77 126.8 74 118"></polyline>
+							</g>
+							<g transform="translate(182, 189)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="6" width="2" height="19"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 4.704683) rotate(-45) translate(-75.304690, -4.704683) " x="74.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="72" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 18 77 26.8000002 74 18"></polyline>
+							</g>
+							<g transform="translate(116, 167)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-9"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="20" y="38">.js</tspan>
+								</text>
+							</g>
+							<g transform="translate(110, 470.500000) scale(1, -1) translate(-190, -470.500000) translate(150, 460)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="6" width="2" height="12"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 4.704683) rotate(-45) translate(-75.304690, -4.704683) " x="74.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="72" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 12 77 20.8000002 74 12"></polyline>
+							</g>
+							<g transform="translate(4, 447)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-10"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="8.076" y="38">.sass</tspan>
+								</text>
+							</g>
+							<g transform="translate(70, 363)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="6" width="2" height="12"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 4.704683) rotate(-45) translate(-75.304690, -4.704683) " x="74.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="72" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 12 77 20.8000002 74 12"></polyline>
+							</g>
+							<g transform="translate(4, 335)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-11"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="15.38" y="38">.cjs</tspan>
+								</text>
+							</g>
+							<g transform="translate(38, 307)">
+								<rect fill="#BBDBEC" x="0" y="22" width="6" height="2"></rect>
+								<rect fill="#BBDBEC" x="2" y="6" width="2" height="16"></rect>
+								<rect fill="#BBDBEC" transform="translate(4.704683, 4.704683) rotate(45) translate(-4.704683, -4.704683) " x="3.70468347" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="6" y="2" width="62" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" transform="translate(66.400000, 3) rotate(270) translate(-66.400000, -3) " points="69.4000001 -1.4000001 66.4000001 7.4000001 63.4000001 -1.4000001"></polyline>
+							</g>
+							<g transform="translate(26, 289)">
+								<polyline stroke="#BBDBEC" stroke-width="2" points="6 30 3 38.8000002 0 30"></polyline>
+								<rect fill="#BBDBEC" x="2" y="0" width="2" height="39"></rect>
+								<rect fill="#BBDBEC" x="0" y="0" width="6" height="2"></rect>
+							</g>
+							<g transform="translate(110, 246.500000) scale(1, -1) translate(-190, -246.500000) translate(150, 236)">
+								<rect fill="#BBDBEC" x="0" y="0" width="2" height="6"></rect>
+								<rect fill="#BBDBEC" x="76" y="6" width="2" height="12"></rect>
+								<rect fill="#BBDBEC" transform="translate(75.304690, 4.704683) rotate(-45) translate(-75.304690, -4.704683) " x="74.3046896" y="1.87968342" width="2" height="5.6500001"></rect>
+								<rect fill="#BBDBEC" x="2" y="2" width="72" height="2"></rect>
+								<polyline stroke="#BBDBEC" stroke-width="2" points="80 12 77 20.8000002 74 12"></polyline>
+							</g>
+							<g transform="translate(4, 223)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-12"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="10.947" y="38">.hbs</tspan>
+								</text>
+							</g>
+							<g transform="translate(32, 177)">
+								<polyline stroke="#BBDBEC" stroke-width="2" points="6 30 3 38.8000002 0 30"></polyline>
+								<rect fill="#BBDBEC" x="2" y="0" width="2" height="39"></rect>
+								<rect fill="#BBDBEC" x="0" y="0" width="6" height="2"></rect>
+							</g>
+							<g transform="translate(4, 111)">
+								<g>
+									<use fill-opacity="0.1" fill="#526B78" fill-rule="evenodd" xlink:href="#path-13"></use>
+									<rect stroke="#526B78" stroke-width="4" x="-2" y="-2" width="66" height="66" rx="3"></rect>
+								</g>
+								<text font-family="'Source Sans Pro', sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">
+									<tspan x="20" y="38">.js</tspan>
+								</text>
+							</g>
+						</g>
+					  </svg>
+					<aside class="notes">
+						One of the standard web development bundler tools. Not specific to Web Assembly, but can be used for it.
+					</aside>
+				</section>
+				<section>
+					<h2>wasm-pack</h2>
+					<p><a href="https://rustwasm.github.io/wasm-pack/">rustwasm.github.io/wasm-pack/</a></p>
+					<aside class="notes">
+						Maps Rust WASM to webpack. Automatically compiles into TypeScript by default.
+					</aside>
+				</section>
+				<section>
+					<img src="wasm-pack-demo.gif" alt="wasm-pack demo animation">
+					<aside class="notes">
+						<ul>
+							<li>Also checks whether you have installed the development environment correctly.</li>
+							<li>Afterwards, you can use that module in your existing webpack project as a library.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h2>Going Further</h2>
+					<p>Why use JavaScript at all?</p>
+					<aside class="notes">
+						<ul>
+							<li>JavaScript in general is very heavily optimized these days, competes with C on performance.</li>
+							<li>JavaScript still faster for talking to browser APIs. This is going to change in the future!</li>
+							<li>But: JavaScript sucks as a language. Designed in a single weekend to add dynamic elements to static web pages, not full-scale web applications.</li>
+							<li>TypeScript solves some issues, but not all of them.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h2>Web Apps in “Pure” Rust</h2>
+					<p><a href="https://github.com/rustwasm/rust-webpack-template">github/rustwasm/rust-webpack-template</a></p>
+					<pre>npx github:rustwasm/rust-webpack-template my-app</pre>
+					<aside class="notes">
+						<ul>
+							<li>Needs node.js and npm installed!</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h1>DEMO</h1>
+				</section>
+				<section>
+						<h2>Event Handling</h2>
+						<p class="source">Based on <a href="https://github.com/rustwasm/wasm-bindgen/issues/1158#issuecomment-452342787">github/rustwasm/wasm-bindgen/issues/1158#issuecomment-452342787</a></p>
+						<pre><code data-trim>
+[dependencies]
+futures = "0.1"
+wasm-bindgen-futures = "0.3"
+						</code></pre>
+						<pre class="stretch"><code data-trim>
+use futures::{stream::Stream, Future};
+use wasm_bindgen_futures::spawn_local;
+mod event_stream;
+use event_stream::EventStream;
+
+// &lt;button id="mybuttonid">Click me!</button>
+fn register_event() {
+  let button: HtmlButtonElement = document.get_element_by_id("mybuttonid")
+    .unwrap().dyn_into().unwrap();
+  let events = EventStream::&lt;Event>::new(button.as_ref(), "click");
+  spawn_local(events.for_each(move |_event| {
+    Ok(())
+  }));
+}
+						</code></pre>
+						<aside class="notes">
+							Unfortunately, that's still the old Futures API! However, the new API doesn't support streams yet anyways.
+						</aside>
+					</section>
+					<section>
+						<h2>Web Frameworks</h2>
+						<ul>
+							<li><a href="https://github.com/DenisKolodin/yew">yew</a></li>
+							<li><a href="https://chinedufn.github.io/percy/">percy</a></li>
+							<li><a href="https://github.com/flosse/rust-web-framework-comparison#frontend-frameworks-wasm">etc etc etc</a></li>
+						</ul>
+						<aside class="notes">
+							<ul>
+								<li>Yew (pronounced /juː/, the same way as "you") is a modern Rust framework inspired by Elm and ReactJS for creating multi-threaded frontend apps with WebAssembly.</li>
+								<li>Percy is a modular toolkit for building isomorphic web apps with Rust + WebAssembly. (isomorphic: same code on server and client)</li>
+								<li>Linked comparison page currently has 11 frameworks listed. All are immature right now.</li>
+								<li>Most of them are copies of react in some way.</li>
+							</ul>
+						</aside>
+					</section>
+					<section>
+					<svg
+						xmlns:dc="http://purl.org/dc/elements/1.1/"
+						xmlns:cc="http://creativecommons.org/ns#"
+						xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+						xmlns:svg="http://www.w3.org/2000/svg"
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 1442.9733 602.98669"
+						height="200px"
+						xml:space="preserve"
+						id="svg2"
+						version="1.1"><defs
+							id="defs6" /><g
+							transform="matrix(1.3333333,0,0,-1.3333333,0,602.98667)"
+							id="g10"><g
+							transform="scale(0.1)"
+							id="g12"><path
+								id="path14"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="m 10519,1519.96 h -73.4 v -191.11 h -64.2 v 191.11 h -73.5 v 55.21 h 211.1 v -55.21 0" /><path
+								id="path16"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="m 10547.7,1575.17 h 94.5 l 42.4,-164.21 h 0.7 l 42.5,164.21 h 94.5 v -246.32 h -60.4 v 186.97 h -0.7 l -51.7,-186.97 h -49 l -51.8,186.97 h -0.7 v -186.97 h -60.3 v 246.32" /><path
+								id="path18"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="m 7978.08,1342.75 c -89.56,-37.77 -180,-56.68 -271.24,-56.68 -144.07,0 -273.56,25.11 -388.6,75.22 -115.05,50.14 -212.06,119.18 -291.08,207.22 -79.06,87.94 -139.61,191.33 -181.75,310.1 -42.15,118.77 -63.24,246.84 -63.24,384.09 0,140.7 21.02,271.37 63.05,391.93 42.01,120.51 102.46,225.63 181.31,315.39 78.85,89.75 175.73,160.11 290.71,211.19 114.99,51.01 244.47,76.56 388.54,76.56 96.57,0 190.04,-14.57 280.49,-43.64 90.44,-29.14 172.07,-71.91 244.97,-128.31 72.89,-56.42 133.03,-125.97 180.44,-208.59 47.43,-82.69 76.43,-177.54 86.98,-284.64 h -395.1 c -24.61,105.31 -72.04,184.34 -142.27,237.03 -70.31,52.69 -155.47,79.04 -255.51,79.04 -93.11,0 -172.13,-18.04 -237.1,-54.12 -64.95,-36.07 -117.65,-84.49 -158.06,-145.17 -40.42,-60.75 -69.8,-129.8 -88.21,-207.23 -18.48,-77.42 -27.64,-157.44 -27.64,-240.13 0,-79.22 9.22,-156.21 27.69,-230.96 18.49,-74.77 47.92,-142.09 88.34,-201.89 40.41,-59.82 93.17,-107.73 158.25,-143.81 65.02,-36.08 144.17,-54.12 237.42,-54.12 137.12,0 242.98,34.59 317.73,103.76 74.77,69.19 118.26,169.48 130.62,300.88 h -416.19 v 309.45 h 789.09 V 1328.3 h -262.57 l -42.03,213.36 c -73.76,-94.84 -155.47,-161.17 -245.04,-198.91" /><path
+								id="path20"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="M 9198.36,3210.16 V 1678.83 h 916.74 V 1329.72 H 8785.78 v 1880.44 h 412.58" /><path
+								id="path22"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="M 7247.14,1095.97 C 6615.86,712.02 5670.38,493.484 4615.45,493.484 c -1900.61,0 -3441.37,791.426 -3441.37,1767.726 0,976.28 1540.76,1767.72 3441.37,1767.72 1058.79,0 2008.13,-222.6 2639.42,-608.95 C 6565.8,4067.31 5330.32,4522.18 3917.71,4522.39 1754.21,4522.75 0.1875,3510.64 0,2261.82 -0.183594,1013.04 1753.52,0.320313 3917.02,0 c 1407,-0.226563 2639.27,453.164 3330.12,1095.97" /><path
+								id="path24"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="M 3779.98,3356.47 3417.18,1786.54 2979.1,3356.47 H 2646.44 L 2209.34,1786.52 1845.46,3356.47 H 1502.7 l 538.32,-2046.3 h 321.59 l 452.86,1607.25 447.4,-1607.25 h 322.52 l 557.24,2046.3 h -362.65" /><path
+								id="path26"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="m 5049.1,2495.18 c -50.38,70.9 -113.39,125.47 -187.33,162.22 -76.03,37.8 -164.18,56.95 -261.98,56.95 -110.08,0 -209.26,-19.96 -294.78,-59.33 -81.1,-37.35 -150.33,-92.25 -205.77,-163.2 -102.61,-131.3 -156.85,-316.31 -156.85,-534.98 0,-97.33 13.81,-188.65 41.04,-271.45 27.39,-83.24 67.82,-156.31 120.17,-217.14 110.07,-127.9 266.99,-195.51 453.8,-195.51 98.09,0 178.18,10.26 244.8,31.36 58.23,18.42 96.92,42.29 128.61,63.22 40.84,26.94 78.35,60.06 111.53,98.39 28.16,32.55 53.24,68.91 74.56,108.05 38.17,70.11 56.65,135.6 60.85,170.38 l 2.79,23 H 4913.3 l -1.47,-18.94 c -6.74,-86.82 -120.7,-241.93 -323.73,-241.93 -290.24,0 -359.39,209.82 -363.98,394.58 h 971.69 v 20.53 c 0,119.15 -12.19,227.94 -36.24,323.37 -24.59,97.62 -61.75,181.88 -110.47,250.43 z m -480.01,-21.95 c 215.27,0 330.36,-115.87 351.32,-354.05 h -696 c 10.2,193.95 163.89,354.05 344.68,354.05" /><path
+								id="path28"
+								style="fill:#961a1f;fill-opacity:1;fill-rule:nonzero;stroke:none"
+								d="m 6540.78,2298.41 c -25.88,82.68 -64.03,155.53 -113.34,216.55 -50.93,62.99 -112.7,111.98 -183.58,145.61 -74,35.11 -156.95,52.91 -246.53,52.91 H 5997 c -82.65,-1.34 -158.12,-19.36 -224.27,-53.58 -54.7,-28.27 -103.72,-67.96 -146.22,-118.32 v 627.78 H 5360.37 V 1309.85 h 253.36 v 126.56 c 22.24,-29.1 50.82,-59.8 88.68,-86.93 71.86,-51.5 160.76,-77.6 264.23,-77.6 111.29,0 210.5,24.82 294.92,73.8 75.24,43.64 138.94,106.52 189.35,186.86 44.01,70.14 77.5,152.75 99.5,245.55 19.01,80.22 29.07,168 29.07,253.84 0,94.85 -13.02,184.5 -38.7,266.48 z m -239.14,-301.94 c 0,-145.99 -29.36,-268.34 -84.94,-353.83 -59.17,-91.08 -145.04,-137.24 -255.18,-137.24 -159.26,0 -345.23,111.37 -345.23,425.23 0,150.33 18.58,265.99 56.79,353.65 55.18,126.56 147.87,188.08 283.33,188.08 144.15,0 240.56,-56.5 294.73,-172.72 44.75,-96.05 50.5,-212.47 50.5,-303.17" /></g></g></svg>
+					<aside class="notes">
+						<ul>
+							<li>After native plugins were phased out from browsers, web game developers needed a replacement for rendering graphics quickly.</li>
+							<li>Same process as for WASM, but a bit earlier.</li>
+							<li>OpenGL has been a cross-platform standard for 2D and 3D graphics since 1997.</li>
+							<li>In 2003, OpenGL ES as a subset was released for mobile targets.</li>
+							<li>Supported on all graphics hardware on the market and everything except Xbox in software.</li>
+							<li>To allow mobile devices to support WebGL, it's an adaptation of OpenGL ES.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h2>Version Numbers</h2>
+					<ul>
+						<li>WebGL 1 &#x2192; OpenGL ES 2.0 &#x219d; OpenGL 3.1</li>
+						<li>WebGL 2 &#x2192; OpenGL ES 3.0 &#x2192; OpenGL 4.3</li>
+					</ul>
+				</section>
+				<section>
+					<img src="caniuse-webgl.png" alt="Can I Use WebGL">
+					<aside class="notes">
+						Actual support on the device also depends on the graphics driver!
+					</aside>
+				</section>
+				<section>
+					<img src="caniuse-webgl2.png" alt="Can I Use WebGL 2">
+				</section>
+				<section>
+					<p>Why WebGL + WASM?</p>
+					<aside class="notes">
+						<ul>
+							<li>OpenGL was never designed for a scripting language like JavaScript.</li>
+							<li>It needs manual memory management in a language that doesn't support that.</li>
+							<li>Working with binary data is also more complicated than it needs to be.</li>
+							<li>Possibility of using the same code on web and native.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h2>OpenGL Basics</h2>
+					<aside class="notes">
+						Fully explaining how OpenGL works would need a whole semester course by itself. This will only cover the basic concept.
+					</aside>
+				</section>
+				<section>
+					<h2>OpenGL Pipeline</h2>
+					<img src="gl-pipeline.png" alt="OpenGL Pipeline" style="border:none; padding: 1em;">
+					<p class="source">Image source: <a href="https://www.labri.fr/perso/nrougier/python-opengl/">https://www.labri.fr/perso/nrougier/python-opengl/</a></p>
+					<aside class="notes">
+						<ul>
+							<li>Vertices are an array buffer aka <code>[f32]</code>.</li>
+							<li>Vertex and fragment shader supplied by the program, rest is hardware (but can be configured to some extent).</li>
+							<li>Vertex and fragment shader are written in a variant of C99.</li>
+							<li>Whether the result is 2D or 3D is just a matter of what the vertex shader does. OpenGL does not inherently do anything 3D.</li>
+						</ul>
+					</aside>
+				</section>
+				<section>
+					<h1>DEMO</h1>
+				</section>
 			</div>
 		</div>
 
@@ -38,8 +545,6 @@
 			// - https://github.com/hakimel/reveal.js#dependencies
 			Reveal.initialize({
 				dependencies: [
-					{ src: 'plugin/markdown/marked.js' },
-					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
 					{ src: 'plugin/highlight/highlight.js', async: true }
 				]
