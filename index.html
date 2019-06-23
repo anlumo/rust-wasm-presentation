@@ -403,7 +403,7 @@ use wasm_bindgen_futures::spawn_local;
 mod event_stream;
 use event_stream::EventStream;
 
-// &lt;button id="mybuttonid">Click me!</button>
+// &lt;button id="mybuttonid">Click me!&lt;/button>
 fn register_event() {
   let button: HtmlButtonElement = document.get_element_by_id("mybuttonid")
     .unwrap().dyn_into().unwrap();
