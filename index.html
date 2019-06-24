@@ -46,6 +46,7 @@
 						<li>Java Applets, Flash, Unity Plugin</li>
 						<li>DHTML with JavaScript</li>
 						<li>asm.js</li>
+						<li>Google Native Client (NaCl)</li>
 					</ul>
 					<aside class="notes">
 						<ul>
@@ -63,6 +64,28 @@
 					<img class="stretch" src="caniuse.png" width="100%" height="100%" alt="Browser Support">
 					<aside class="notes">
 						node.js also supports Web Assembly.
+					</aside>
+				</section>
+				<section>
+					<h2>Web Assembly Languages</h2>
+					<ul style="column-count: 2;">
+						<li>AssemblyScript</li>
+						<li>Brainfuck</li>
+						<li>C</li>
+						<li>C#</li>
+						<li>C++</li>
+						<li>Clean</li>
+						<li>Forth</li>
+						<li>Go</li>
+						<li>Lua</li>
+						<li>Rust</li>
+						<li>TypeScript</li>
+						<li>Wah</li>
+						<li>Zig</li>
+					</ul>
+					<p class="source">Source: <a href="https://github.com/appcypher/awesome-wasm-langs">github/appcypher/awesome-wasm-langs</a></p>
+					<aside class="notes">
+						Those are only the ones stable for production usage (whatever that is for Brainfuck).
 					</aside>
 				</section>
 				<section>
@@ -99,6 +122,7 @@
 					<aside class="notes">
 						<ul>
 							<li>WASM doesn't provide direct access to JavaScript APIs. wasm-bindgen can generate mappings for them, including converting common data types like strings.</li>
+							<li>Iterators are mapped automatically, Futures can be converted into Promises (v0.1) and vice-versa, Closures will be explained later.</li>
 							<li>Also maps Rust structs and impls into JavaScript! Can be used like regular JavaScript objects (no attributes, though).</li>
 							<li>Designed to provide a seamless transition once the official standard for accessing the browser API directly is implemented.</li>
 							<li>js-sys provides automatically generated mappings for standard JavaScript APIs (browsers and node.js) like Object, Number, Iterator, Array, ArrayBuffer, Date, etc</li>
@@ -389,6 +413,31 @@ wasm-bindgen = "0.2"
 				</section>
 				<section>
 					<h1>DEMO</h1>
+				</section>
+				<section>
+					<h2>Closures</h2>
+					<ul>
+						<li>JavaScript uses closures a lot!</li>
+						<li>Managed by <code>wasm_bindgen::closure::Closure</code></li>
+					</ul>
+					<pre><code data-trim class="rust">
+let cb = Closure::wrap(Box::new(move || {
+	// …
+}) as Box&lt;dyn FnMut()>);
+					</code></pre>
+					<pre><code data-trim class="rust">let cb = Closure::once(move || …);</code></pre>
+					<pre><code data-trim class="rust">cb.forget();</code></pre>
+					<pre><code data-trim class="rust">let cb = Closure::once_into_js(move || …);</code></pre>
+					<aside class="notes">
+						<ul>
+							<li>Fn and FnMut are supported by wrap().</li>
+							<li>Needs careful memory management, because the JS garbage collector doesn't manage WASM references (they are just a number for the runtime).</li>
+							<li>Closure needs static lifetime (no stack references, move semantics)</li>
+							<li>once(): Since we have no way of enforcing that JS cannot attempt to call an FnOne(A...) -> R more than once, Closure::once() produces a Closure&lt;FnMut(A...) -> R> that will dynamically throw a JavaScript error if called more than once.</li>
+							<li>forget: When a Closure is dropped it will invalidate the associated JS closure, but this isn't always desired. Some callbacks are alive for the entire duration of the program, so this can be used to conveniently leak this instance of Closure while performing as much internal cleanup as it can.</li>
+							<li>once_into_js(): Unlike Closure::once, Closure::once_into_js does not return a Closure that can be dropped before the function is invoked to deallocate the closure. The only way the FnOnce is deallocated is by calling the JavaScript function. If the JavaScript function is never called then the FnOnce and everything it closes over will leak.</li>
+						</ul>
+					</aside>
 				</section>
 				<section>
 						<h2>Event Handling</h2>
